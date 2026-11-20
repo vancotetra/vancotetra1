@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智帳 SmartLedger - Android 智慧記帳</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts: Noto Sans TC 與 Plus Jakarta Sans / JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* Material Design 3 基礎設定與自定義樣式 */
+        :root {
+            --md-primary: #0d9488;        /* Teal 600 */
+            --md-primary-container: #ccfbf1;
+            --md-on-primary-container: #115e59;
+            --md-surface: #f8fafc;
+            --md-surface-container: #ffffff;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #e2e8f0;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        .font-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 隱藏捲軸但保留平滑滾動體驗（模擬原生 Android App） */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 底部抽屜 (Bottom Sheet) 滑動動畫 */
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-sheet-up {
+            animation: slideUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out forwards;
+        }
+
+        /* Material Design 3 按壓水波紋質感 */
+        .md-ripple {
+            transition: transform 0.1s ease, background-color 0.15s ease;
+        }
+        .md-ripple:active {
+            transform: scale(0.97);
+        }
+
+        /* 環圈圖動畫 */
+        circle.donut-segment {
+            transition: stroke-dasharray 0.5s cubic-bezier(0.16, 1, 0.3, 1), stroke-dashoffset 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center sm:p-4">
+
+    <!-- Android 手機外框容器（桌面端置中模擬手機螢幕，手機端 100% 全螢幕） -->
+    <div id="app-shell" class="relative w-full sm:w-[412px] h-screen sm:h-[850px] bg-slate-50 sm:rounded-[36px] sm:shadow-2xl sm:border-[8px] sm:border-slate-900 overflow-hidden flex flex-col">
+        
+        <!-- 模擬 Android 頂部狀態列 (僅桌面預覽顯示裝飾，提升沉浸感) -->
+        <div class="hidden sm:flex items-center justify-between px-6 pt-2.5 pb-1 bg-slate-50 text-[11px] font-bold text-slate-600 select-none shrink-0">
+            <span id="status-clock" class="font-num">15:58</span>
+            <div class="w-20 h-4 bg-slate-900 rounded-full mx-auto"></div>
+            <div class="flex items-center gap-1.5">
+                <span>5G</span>
+                <span>100%</span>
+            </div>
+        </div>
+
+        <!-- 頂部應用標題列 (Top App Bar) -->
+        <header class="px-5 pt-3 pb-2.5 bg-slate-50/90 backdrop-blur-md flex items-center justify-between shrink-0 z-10 border-b border-slate-200/50">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-sm shadow-teal-600/30 font-black text-lg">
+                    帳
+                </div>
+                <div>
+                    <h1 id="header-title" class="text-lg font-black text-slate-800 tracking-tight leading-tight">財務總覽</h1>
+                    <p id="header-subtitle" class="text-[11px] text-slate-400 font-medium">2026年 11月 · 智慧管家</p>
+                </div>
+            </div>
+            
+            <!-- 右上角快捷操作（匯出 / 重置選單按鈕） -->
+            <button onclick="openDataModal()" class="w-10 h-10 rounded-full hover:bg-slate-200/70 active:bg-slate-200 flex items-center justify-center text-slate-600 transition-colors" title="資料管理與匯出">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- 主要滾動內容區 -->
+        <main id="main-content" class="flex-1 overflow-y-auto no-scrollbar px-4 pt-3 pb-28 space-y-4">
+            <!-- 內容將由 JavaScript 根據目前的分頁動態渲染 -->
+        </main>
+
+        <!-- Material Design 3 懸浮新增按鈕 (FAB) -->
+        <button onclick="openAddTransactionSheet()" aria-label="新增記帳" class="md-ripple absolute right-5 bottom-[84px] z-20 h-14 px-4 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white shadow-lg shadow-teal-600/35 flex items-center gap-2 font-bold text-base">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span>記一筆</span>
+        </button>
+
+        <!-- Material Design 3 底部導覽列 (Navigation Bar) -->
+        <nav class="h-[72px] bg-white border-t border-slate-200/80 px-2 flex items-center justify-around shrink-0 z-20">
+            <button onclick="switchTab('overview')" id="nav-overview" class="nav-item flex-1 flex flex-col items-center justify-center gap-1 py-1.5 group">
+                <div class="nav-pill px-4 py-1 rounded-full transition-colors bg-teal-100 text-teal-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                    </svg>
+                </div>
+                <span class="nav-label text-[11px] font-bold text-teal-800">總覽</span>
+            </button>
+
+            <button onclick="switchTab('transactions')" id="nav-transactions" class="nav-item flex-1 flex flex-col items-center justify-center gap-1 py-1.5 group">
+                <div class="nav-pill px-4 py-1 rounded-full transition-colors text-slate-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                </div>
+                <span class="nav-label text-[11px] font-medium text-slate-500">明細</span>
+            </button>
+
+            <button onclick="switchTab('analytics')" id="nav-analytics" class="nav-item flex-1 flex flex-col items-center justify-center gap-1 py-1.5 group">
+                <div class="nav-pill px-4 py-1 rounded-full transition-colors text-slate-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />
+                    </svg>
+                </div>
+                <span class="nav-label text-[11px] font-medium text-slate-500">分析</span>
+            </button>
+
+            <button onclick="switchTab('reminders')" id="nav-reminders" class="nav-item relative flex-1 flex flex-col items-center justify-center gap-1 py-1.5 group">
+                <div class="nav-pill relative px-4 py-1 rounded-full transition-colors text-slate-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                    </svg>
+                    <!-- 未繳帳單紅點徽章 -->
+                    <span id="nav-badge" class="hidden absolute top-0.5 right-2.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white"></span>
+                </div>
+                <span class="nav-label text-[11px] font-medium text-slate-500">繳費提醒</span>
+            </button>
+        </nav>
+
+        <!-- ============================================================== -->
+        <!-- 底部抽屜 1：新增記帳視窗 (Add Transaction Bottom Sheet) -->
+        <!-- ============================================================== -->
+        <div id="tx-sheet-overlay" class="hidden absolute inset-0 z-40 bg-slate-900/50 backdrop-blur-[1px] flex flex-col justify-end animate-fade-in">
+            <div class="bg-white rounded-t-3xl p-5 shadow-2xl animate-sheet-up max-h-[92%] overflow-y-auto no-scrollbar">
+                <!-- 拖曳指示條 -->
+                <div class="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+                
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-black text-slate-800">新增收支紀錄</h2>
+                    <button onclick="closeAddTransactionSheet()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold">✕</button>
+                </div>
+
+                <!-- 支出 / 收入 分段切換 -->
+                <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-2xl mb-4">
+                    <button id="tx-type-expense" onclick="setTxType('expense')" class="py-2 rounded-xl text-sm font-bold bg-rose-500 text-white shadow-sm transition-all">
+                        支出 (- NT$)
+                    </button>
+                    <button id="tx-type-income" onclick="setTxType('income')" class="py-2 rounded-xl text-sm font-bold text-slate-600 transition-all">
+                        收入 (+ NT$)
+                    </button>
+                </div>
+
+                <!-- 大數字金額輸入區 -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 mb-3">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">輸入金額 (新台幣)</label>
+                    <div class="flex items-baseline gap-1.5">
+                        <span class="text-xl font-black text-slate-400">NT$</span>
+                        <input id="tx-amount" type="number" inputmode="numeric" placeholder="0" class="w-full bg-transparent font-num text-3xl font-extrabold text-slate-800 focus:outline-none">
+                    </div>
+                    <!-- 快速金額累加按鈕 -->
+                    <div class="flex gap-2 mt-2.5 pt-2.5 border-t border-slate-200/70">
+                        <button type="button" onclick="quickAddAmount(100)" class="flex-1 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-num font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition">+100</button>
+                        <button type="button" onclick="quickAddAmount(500)" class="flex-1 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-num font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition">+500</button>
+                        <button type="button" onclick="quickAddAmount(1000)" class="flex-1 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-num font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition">+1000</button>
+                        <button type="button" onclick="clearAmount()" class="px-2.5 py-1.5 rounded-lg bg-slate-200/70 text-xs font-bold text-slate-500 hover:bg-slate-200 active:scale-95 transition">歸零</button>
+                    </div>
+                </div>
+
+                <!-- 分類圖示網格選擇 -->
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-slate-500 mb-2">選擇分類</label>
+                    <div id="tx-category-grid" class="grid grid-cols-4 gap-2">
+                        <!-- 由 JS 動態填入分類按鈕 -->
+                    </div>
+                </div>
+
+                <!-- 日期與備註 -->
+                <div class="grid grid-cols-2 gap-2.5 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">日期</label>
+                        <input id="tx-date" type="date" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 focus:outline-none focus:border-teal-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">備註說明</label>
+                        <input id="tx-note" type="text" placeholder="例如：午餐、加油..." class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 focus:outline-none focus:border-teal-500">
+                    </div>
+                </div>
+
+                <!-- 儲存按鈕 -->
+                <button onclick="saveTransaction()" class="md-ripple w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-base shadow-lg shadow-teal-600/25">
+                    儲存紀錄
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- 底部抽屜 2：新增固定帳單提醒視窗 (Add Reminder Bottom Sheet) -->
+        <!-- ============================================================== -->
+        <div id="reminder-sheet-overlay" class="hidden absolute inset-0 z-40 bg-slate-900/50 backdrop-blur-[1px] flex flex-col justify-end animate-fade-in">
+            <div class="bg-white rounded-t-3xl p-5 shadow-2xl animate-sheet-up max-h-[92%] overflow-y-auto no-scrollbar">
+                <div class="w-10 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-black text-slate-800">新增固定繳費提醒</h2>
+                    <button onclick="closeAddReminderSheet()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold">✕</button>
+                </div>
+
+                <div class="space-y-3.5 mb-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">帳單名稱</label>
+                        <input id="rem-title" type="text" placeholder="例如：中華電信費、房租、台電電費" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">預估金額 (NT$)</label>
+                            <input id="rem-amount" type="number" inputmode="numeric" placeholder="1200" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-num text-sm font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">每月繳費日 (1~31)</label>
+                            <input id="rem-due-day" type="number" min="1" max="31" value="25" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-num text-sm font-bold text-slate-800 focus:outline-none focus:border-teal-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">支出分類</label>
+                            <select id="rem-category" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:border-teal-500">
+                                <option value="housing">🏠 居住/水電</option>
+                                <option value="telecom">📱 電信/網路</option>
+                                <option value="card">💳 信用卡費</option>
+                                <option value="insurance">🛡️ 保險/醫療</option>
+                                <option value="entertainment">🎬 訂閱/娛樂</option>
+                                <option value="transport">🚇 交通/停車</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">提前幾天提醒</label>
+                            <select id="rem-advance" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:border-teal-500">
+                                <option value="1">提前 1 天</option>
+                                <option value="3" selected>提前 3 天</option>
+                                <option value="5">提前 5 天</option>
+                                <option value="7">提前 7 天</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="saveReminder()" class="md-ripple w-full py-3.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-base shadow-lg shadow-teal-600/25">
+                    建立繳費提醒
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- 彈出視窗 3：一鍵標記已繳確認框 (Pay Confirmation Dialog) -->
+        <!-- ============================================================== -->
+        <div id="pay-modal-overlay" class="hidden absolute inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-5 animate-fade-in">
+            <div class="bg-white rounded-3xl p-5 w-full max-w-xs shadow-2xl">
+                <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl mx-auto mb-3">
+                    ✅
+                </div>
+                <h3 class="text-lg font-black text-center text-slate-800 mb-1">確認完成繳費？</h3>
+                <p id="pay-modal-desc" class="text-xs text-center text-slate-500 mb-4">將標記「中華電信費」為本月已繳清。</p>
+                
+                <label class="flex items-center gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200 mb-4 cursor-pointer">
+                    <input id="pay-sync-tx" type="checkbox" checked class="w-4 h-4 accent-teal-600 rounded">
+                    <span class="text-xs font-bold text-slate-700">同時自動新增一筆支出紀錄到帳本</span>
+                </label>
+
+                <div class="flex gap-2">
+                    <button onclick="closePayModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm">取消</button>
+                    <button onclick="confirmPayReminder()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-md shadow-emerald-600/20">確認已繳</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- 彈出視窗 4：資料管理與匯出選單 (Data Management Modal) -->
+        <!-- ============================================================== -->
+        <div id="data-modal-overlay" class="hidden absolute inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-5 animate-fade-in">
+            <div class="bg-white rounded-3xl p-5 w-full max-w-xs shadow-2xl">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-base font-black text-slate-800">資料管理與報表</h3>
+                    <button onclick="closeDataModal()" class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">✕</button>
+                </div>
+                <div class="space-y-2.5">
+                    <button onclick="exportCSV()" class="w-full flex items-center gap-3 p-3 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-sm transition-colors text-left">
+                        <span class="text-xl">📊</span>
+                        <div>
+                            <div>匯出 CSV 財務報表</div>
+                            <div class="text-[11px] font-normal text-teal-600">下載完整收支明細 Excel 相容檔</div>
+                        </div>
+                    </button>
+                    <button onclick="resetDemoData()" class="w-full flex items-center gap-3 p-3 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-sm transition-colors text-left">
+                        <span class="text-xl">🔄</span>
+                        <div>
+                            <div>重置為預設範例資料</div>
+                            <div class="text-[11px] font-normal text-amber-600">還原多年度收支與測試帳單</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Android 底部提示訊息條 (Snackbar / Toast) -->
+        <div id="snackbar" class="hidden absolute bottom-[84px] left-4 right-4 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between text-xs font-bold animate-fade-in">
+            <span id="snackbar-msg">已儲存紀錄</span>
+            <span class="text-teal-400">完成</span>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * =====================================================================
+         * 1. 分類定義與系統基準日期設定
+         * =====================================================================
+         */
+        // 系統當前日期（依據環境設定為 2026-11-19，確保範例資料與繳費提醒天數精準對應）
+        const TODAY_STR = '2026-11-19';
+        const CURRENT_YEAR = 2026;
+        const CURRENT_MONTH = 11; // 1~12
+        const CURRENT_DAY = 19;
+
+        const CATEGORIES = {
+            // 支出分類
+            food:          { id: 'food',          name: '餐飲美食', icon: '🍱', color: '#f97316', bg: 'bg-orange-100', text: 'text-orange-600', type: 'expense' },
+            transport:     { id: 'transport',     name: '交通通勤', icon: '🚇', color: '#0ea5e9', bg: 'bg-sky-100',    text: 'text-sky-600',    type: 'expense' },
+            shopping:      { id: 'shopping',      name: '日常購物', icon: '🛍️', color: '#ec4899', bg: 'bg-pink-100',   text: 'text-pink-600',   type: 'expense' },
+            housing:       { id: 'housing',       name: '居住/水電', icon: '🏠', color: '#8b5cf6', bg: 'bg-violet-100', text: 'text-violet-600', type: 'expense' },
+            telecom:       { id: 'telecom',       name: '電信/網路', icon: '📱', color: '#06b6d4', bg: 'bg-cyan-100',   text: 'text-cyan-600',   type: 'expense' },
+            card:          { id: 'card',          name: '信用卡費', icon: '💳', color: '#6366f1', bg: 'bg-indigo-100', text: 'text-indigo-600', type: 'expense' },
+            insurance:     { id: 'insurance',     name: '醫療/保險', icon: '🛡️', color: '#10b981', bg: 'bg-emerald-100',text: 'text-emerald-600',type: 'expense' },
+            entertainment: { id: 'entertainment', name: '休閒娛樂', icon: '🎬', color: '#eab308', bg: 'bg-yellow-100', text: 'text-yellow-700', type: 'expense' },
+            // 收入分類
+            salary:        { id: 'salary',        name: '薪資獎金', icon: '💼', color: '#0d9488', bg: 'bg-teal-100',   text: 'text-teal-700',   type: 'income' },
+            investment:    { id: 'investment',    name: '投資股息', icon: '📈', color: '#16a34a', bg: 'bg-green-100',  text: 'text-green-700',  type: 'income' },
+            other_in:      { id: 'other_in',      name: '其他收入', icon: '🧧', color: '#e11d48', bg: 'bg-rose-100',   text: 'text-rose-600',   type: 'income' }
+        };
+
+        const STORAGE_KEYS = {
+            TX: 'smart_ledger_transactions_v1',
+            REM: 'smart_ledger_reminders_v1'
+        };
+
+        /**
+         * =====================================================================
+         * 2. 應用程式狀態 (State)
+         * =====================================================================
+         */
+        let transactions = [];
+        let reminders = [];
+        let activeTab = 'overview'; // 'overview' | 'transactions' | 'analytics' | 'reminders'
+
+        // 明細頁篩選狀態
+        let filterSearch = '';
+        let filterType = 'all'; // 'all' | 'expense' | 'income'
+        let filterCategory = 'all';
+
+        // 分析頁篩選狀態
+        let analyticsMode = 'monthly'; // 'monthly' | 'yearly'
+        let selectedYear = CURRENT_YEAR;
+        let selectedMonth = CURRENT_MONTH;
+
+        // 記帳表單狀態
+        let formTxType = 'expense';
+        let formTxCategory = 'food';
+
+        // 待確認繳費的帳單 ID
+        let pendingPayReminderId = null;
+
+        /**
+         * =====================================================================
+         * 3. 預設範例資料產生器 (涵蓋 2025 ~ 2026 多月份資料)
+         * =====================================================================
+         */
+        function getDefaultTransactions() {
+            return [
+                // 2026年 11月 (本月)
+                { id: 'tx_101', type: 'income',  category: 'salary',        amount: 58000, date: '2026-11-05', note: '11月份本薪入帳' },
+                { id: 'tx_102', type: 'expense', category: 'housing',       amount: 14500, date: '2026-11-05', note: '11月套房租金' },
+                { id: 'tx_103', type: 'expense', category: 'transport',     amount: 1200,  date: '2026-11-06', note: 'TPASS 基北北桃月票' },
+                { id: 'tx_104', type: 'expense', category: 'food',          amount: 480,   date: '2026-11-08', note: '週末早午餐聚會' },
+                { id: 'tx_105', type: 'expense', category: 'shopping',      amount: 2680,  date: '2026-11-11', note: '雙11生活日用品補貨' },
+                { id: 'tx_106', type: 'income',  category: 'investment',    amount: 3450,  date: '2026-11-12', note: 'ETF 季度配息' },
+                { id: 'tx_107', type: 'expense', category: 'food',          amount: 165,   date: '2026-11-15', note: '雞腿便當與手搖飲' },
+                { id: 'tx_108', type: 'expense', category: 'entertainment', amount: 390,   date: '2026-11-16', note: '串流影音月費' },
+                { id: 'tx_109', type: 'expense', category: 'food',          amount: 620,   date: '2026-11-18', note: '全聯生鮮食材採買' },
+                { id: 'tx_110', type: 'expense', category: 'food',          amount: 135,   date: '2026-11-19', note: '超商咖啡與早餐' },
+
+                // 2026年 10月 (上月)
+                { id: 'tx_201', type: 'income',  category: 'salary',        amount: 58000, date: '2026-10-05', note: '10月份本薪' },
+                { id: 'tx_202', type: 'expense', category: 'housing',       amount: 14500, date: '2026-10-05', note: '10月房租' },
+                { id: 'tx_203', type: 'expense', category: 'card',          amount: 6850,  date: '2026-10-15', note: '國泰CUBE卡帳單' },
+                { id: 'tx_204', type: 'expense', category: 'food',          amount: 7400,  date: '2026-10-20', note: '10月餐飲總匯' },
+                { id: 'tx_205', type: 'expense', category: 'transport',     amount: 1580,  date: '2026-10-22', note: '高鐵返鄉車票' },
+                { id: 'tx_206', type: 'expense', category: 'telecom',       amount: 699,   date: '2026-10-25', note: '中華電信5G月租' },
+
+                // 2026年 1~9月 (年度趨勢完整分布)
+                { id: 'tx_301', type: 'income',  category: 'salary',        amount: 58000, date: '2026-09-05', note: '9月薪資' },
+                { id: 'tx_302', type: 'expense', category: 'housing',       amount: 15800, date: '2026-09-10', note: '房租含夏季電費' },
+                { id: 'tx_303', type: 'expense', category: 'food',          amount: 8200,  date: '2026-09-18', note: '中秋烤肉與餐飲' },
+                { id: 'tx_304', type: 'expense', category: 'shopping',      amount: 4200,  date: '2026-09-25', note: '換季衣物採購' },
+
+                { id: 'tx_305', type: 'income',  category: 'salary',        amount: 58000, date: '2026-08-05', note: '8月薪資' },
+                { id: 'tx_306', type: 'expense', category: 'housing',       amount: 16200, date: '2026-08-08', note: '房租與水電' },
+                { id: 'tx_307', type: 'expense', category: 'entertainment', amount: 6500,  date: '2026-08-15', note: '宜蘭兩天一夜旅遊' },
+                { id: 'tx_308', type: 'expense', category: 'food',          amount: 7100,  date: '2026-08-22', note: '日常餐飲' },
+
+                { id: 'tx_309', type: 'income',  category: 'salary',        amount: 56000, date: '2026-07-05', note: '7月薪資' },
+                { id: 'tx_310', type: 'expense', category: 'housing',       amount: 14500, date: '2026-07-05', note: '7月房租' },
+                { id: 'tx_311', type: 'expense', category: 'insurance',     amount: 8900,  date: '2026-07-14', note: '年度意外醫療險' },
+                { id: 'tx_312', type: 'expense', category: 'food',          amount: 6800,  date: '2026-07-24', note: '日常餐飲' },
+
+                { id: 'tx_313', type: 'income',  category: 'salary',        amount: 56000, date: '2026-06-05', note: '6月薪資' },
+                { id: 'tx_314', type: 'expense', category: 'housing',       amount: 14500, date: '2026-06-05', note: '6月房租' },
+                { id: 'tx_315', type: 'expense', category: 'food',          amount: 6400,  date: '2026-06-19', note: '餐飲支出' },
+                { id: 'tx_316', type: 'expense', category: 'card',          amount: 4300,  date: '2026-06-25', note: '信用卡帳單' },
+
+                { id: 'tx_317', type: 'income',  category: 'salary',        amount: 56000, date: '2026-05-05', note: '5月薪資' },
+                { id: 'tx_318', type: 'expense', category: 'housing',       amount: 14500, date: '2026-05-05', note: '5月房租' },
+                { id: 'tx_319', type: 'expense', category: 'shopping',      amount: 5600,  date: '2026-05-10', note: '母親節聚餐與禮物' },
+                { id: 'tx_320', type: 'expense', category: 'food',          amount: 6100,  date: '2026-05-20', note: '餐飲支出' },
+
+                { id: 'tx_321', type: 'income',  category: 'salary',        amount: 56000, date: '2026-04-05', note: '4月薪資' },
+                { id: 'tx_322', type: 'expense', category: 'housing',       amount: 14500, date: '2026-04-05', note: '4月房租' },
+                { id: 'tx_323', type: 'expense', category: 'food',          amount: 6300,  date: '2026-04-16', note: '餐飲支出' },
+
+                { id: 'tx_324', type: 'income',  category: 'salary',        amount: 56000, date: '2026-03-05', note: '3月薪資' },
+                { id: 'tx_325', type: 'expense', category: 'housing',       amount: 14500, date: '2026-03-05', note: '3月房租' },
+                { id: 'tx_326', type: 'expense', category: 'food',          amount: 6750,  date: '2026-03-19', note: '餐飲支出' },
+
+                { id: 'tx_327', type: 'income',  category: 'salary',        amount: 88000, date: '2026-02-05', note: '2月薪資含年終獎金' },
+                { id: 'tx_328', type: 'expense', category: 'housing',       amount: 14500, date: '2026-02-05', note: '2月房租' },
+                { id: 'tx_329', type: 'expense', category: 'shopping',      amount: 12000, date: '2026-02-16', note: '農曆春節紅包與年貨' },
+                { id: 'tx_330', type: 'expense', category: 'food',          amount: 7800,  date: '2026-02-20', note: '春節聚餐' },
+
+                { id: 'tx_331', type: 'income',  category: 'salary',        amount: 56000, date: '2026-01-05', note: '1月薪資' },
+                { id: 'tx_332', type: 'expense', category: 'housing',       amount: 14500, date: '2026-01-05', note: '1月房租' },
+                { id: 'tx_333', type: 'expense', category: 'food',          amount: 6500,  date: '2026-01-18', note: '日常餐飲' },
+
+                // 2025年 範例資料 (供切換年份比較)
+                { id: 'tx_401', type: 'income',  category: 'salary',        amount: 52000, date: '2025-12-05', note: '2025年12月薪資' },
+                { id: 'tx_402', type: 'expense', category: 'housing',       amount: 14000, date: '2025-12-05', note: '房租' },
+                { id: 'tx_403', type: 'expense', category: 'shopping',      amount: 9500,  date: '2025-12-24', note: '聖誕交換禮物與大餐' },
+                { id: 'tx_404', type: 'income',  category: 'salary',        amount: 52000, date: '2025-11-05', note: '2025年11月薪資' },
+                { id: 'tx_405', type: 'expense', category: 'housing',       amount: 14000, date: '2025-11-05', note: '房租' },
+                { id: 'tx_406', type: 'expense', category: 'food',          amount: 7200,  date: '2025-11-20', note: '日常餐飲' }
+            ];
+        }
+
+        function getDefaultReminders() {
+            // 今天是 2026-11-19，設定不同到期日展現：已逾期、即將到期、未到期、已繳清
+            return [
+                {
+                    id: 'rem_1',
+                    title: '台電電費帳單',
+                    amount: 1420,
+                    dueDay: 17, // 11/17 到期 -> 已逾期 2 天
+                    category: 'housing',
+                    advanceDays: 3,
+                    paidYearMonth: '2026-10'
+                },
+                {
+                    id: 'rem_2',
+                    title: '國泰 CUBE 信用卡費',
+                    amount: 8450,
+                    dueDay: 21, // 11/21 到期 -> 剩 2 天 (即將到期)
+                    category: 'card',
+                    advanceDays: 5,
+                    paidYearMonth: '2026-10'
+                },
+                {
+                    id: 'rem_3',
+                    title: '中華電信 5G 月租費',
+                    amount: 699,
+                    dueDay: 25, // 11/25 到期 -> 剩 6 天
+                    category: 'telecom',
+                    advanceDays: 3,
+                    paidYearMonth: '2026-10'
+                },
+                {
+                    id: 'rem_4',
+                    title: '套房月租金',
+                    amount: 14500,
+                    dueDay: 5,
+                    category: 'housing',
+                    advanceDays: 3,
+                    paidYearMonth: '2026-11' // 本月已繳清
+                }
+            ];
+        }
+
+        /**
+         * =====================================================================
+         * 4. 資料持久化與格式化工具函式
+         * =====================================================================
+         */
+        function loadData() {
+            try {
+                const savedTx = localStorage.getItem(STORAGE_KEYS.TX);
+                const savedRem = localStorage.getItem(STORAGE_KEYS.REM);
+                transactions = savedTx ? JSON.parse(savedTx) : getDefaultTransactions();
+                reminders = savedRem ? JSON.parse(savedRem) : getDefaultReminders();
+                if (!savedTx) saveData();
+            } catch (e) {
+                console.error('讀取本地資料失敗，載入預設值', e);
+                transactions = getDefaultTransactions();
+                reminders = getDefaultReminders();
+            }
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEYS.TX, JSON.stringify(transactions));
+                localStorage.setItem(STORAGE_KEYS.REM, JSON.stringify(reminders));
+            } catch (e) {
+                console.error('儲存資料失敗', e);
+            }
+            updateReminderBadge();
+        }
+
+        function formatCurrency(num) {
+            return 'NT$ ' + Math.round(num).toLocaleString('zh-TW');
+        }
+
+        function formatShortCurrency(num) {
+            if (num >= 10000) {
+                return (num / 10000).toFixed(1).replace(/\.0$/, '') + '萬';
+            }
+            return num.toLocaleString('zh-TW');
+        }
+
+        function showSnackbar(msg) {
+            const bar = document.getElementById('snackbar');
+            document.getElementById('snackbar-msg').textContent = msg;
+            bar.classList.remove('hidden');
+            clearTimeout(window._snackTimer);
+            window._snackTimer = setTimeout(() => {
+                bar.classList.add('hidden');
+            }, 2600);
+        }
+
+        /**
+         * 計算每筆固定帳單在本月 (2026-11) 的狀態
+         */
+        function getReminderStatus(rem) {
+            const currentYM = `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, '0')}`;
+            if (rem.paidYearMonth === currentYM) {
+                return { status: 'paid', label: '本月已繳', diffDays: 0 };
+            }
+            const diffDays = rem.dueDay - CURRENT_DAY;
+            if (diffDays < 0) {
+                return { status: 'overdue', label: `已逾期 ${Math.abs(diffDays)} 天`, diffDays };
+            } else if (diffDays === 0) {
+                return { status: 'urgent', label: '今天到期', diffDays: 0 };
+            } else if (diffDays <= rem.advanceDays) {
+                return { status: 'urgent', label: `剩 ${diffDays} 天到期`, diffDays };
+            } else {
+                return { status: 'upcoming', label: `每月 ${rem.dueDay} 日繳費`, diffDays };
+            }
+        }
+
+        function updateReminderBadge() {
+            const alertCount = reminders.filter(r => {
+                const st = getReminderStatus(r).status;
+                return st === 'overdue' || st === 'urgent';
+            }).length;
+
+            const badge = document.getElementById('nav-badge');
+            if (alertCount > 0) {
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        /**
+         * =====================================================================
+         * 5. 分頁導覽切換邏輯
+         * =====================================================================
+         */
+        function switchTab(tabName) {
+            activeTab = tabName;
+
+            // 更新頂部標題
+            const titles = {
+                overview:     { title: '財務總覽', sub: `${CURRENT_YEAR}年 ${CURRENT_MONTH}月 · 智慧管家` },
+                transactions: { title: '收支明細', sub: '所有交易紀錄與篩選' },
+                analytics:    { title: '消費分析', sub: '月度與年度趨勢洞察' },
+                reminders:    { title: '繳費提醒', sub: '固定帳單與到期通知' }
+            };
+            document.getElementById('header-title').textContent = titles[tabName].title;
+            document.getElementById('header-subtitle').textContent = titles[tabName].sub;
+
+            // 更新底部導覽列樣式
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                const pill = btn.querySelector('.nav-pill');
+                const label = btn.querySelector('.nav-label');
+                pill.classList.remove('bg-teal-100', 'text-teal-800');
+                pill.classList.add('text-slate-500');
+                label.classList.remove('font-bold', 'text-teal-800');
+                label.classList.add('font-medium', 'text-slate-500');
+            });
+
+            const activeBtn = document.getElementById(`nav-${tabName}`);
+            if (activeBtn) {
+                const pill = activeBtn.querySelector('.nav-pill');
+                const label = activeBtn.querySelector('.nav-label');
+                pill.classList.remove('text-slate-500');
+                pill.classList.add('bg-teal-100', 'text-teal-800');
+                label.classList.remove('font-medium', 'text-slate-500');
+                label.classList.add('font-bold', 'text-teal-800');
+            }
+
+            // 捲動回頂部並渲染畫面
+            const mainEl = document.getElementById('main-content');
+            mainEl.scrollTop = 0;
+            renderCurrentView();
+        }
+
+        function renderCurrentView() {
+            const mainEl = document.getElementById('main-content');
+            if (activeTab === 'overview') {
+                mainEl.innerHTML = renderOverviewHTML();
+            } else if (activeTab === 'transactions') {
+                mainEl.innerHTML = renderTransactionsHTML();
+            } else if (activeTab === 'analytics') {
+                mainEl.innerHTML = renderAnalyticsHTML();
+            } else if (activeTab === 'reminders') {
+                mainEl.innerHTML = renderRemindersHTML();
+            }
+        }
+
+        /**
+         * =====================================================================
+         * 6. 視圖 1：財務總覽 (Overview)
+         * =====================================================================
+         */
+        function renderOverviewHTML() {
+            const ymPrefix = `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, '0')}`;
+            const monthTxs = transactions.filter(t => t.date.startsWith(ymPrefix));
+
+            const totalIncome = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+            const totalExpense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+            const balance = totalIncome - totalExpense;
+
+            // 篩選出緊急或逾期的帳單
+            const urgentBills = reminders.filter(r => {
+                const st = getReminderStatus(r).status;
+                return st === 'overdue' || st === 'urgent';
+            });
+
+            // 近期 5 筆交易
+            const recentTxs = [...transactions]
+                .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+                .slice(0, 5);
+
+            // 計算本月支出前 3 名分類
+            const catMap = {};
+            monthTxs.filter(t => t.type === 'expense').forEach(t => {
+                catMap[t.category] = (catMap[t.category] || 0) + t.amount;
+            });
+            const topCats = Object.entries(catMap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+            return `
+                <!-- 本月淨結餘主卡片 (Material Design 3 Elevated Gradient Card) -->
+                <section class="rounded-3xl bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 p-5 text-white shadow-lg shadow-teal-700/20">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-medium text-teal-100">${CURRENT_YEAR}年 ${CURRENT_MONTH}月 淨結餘</span>
+                        <span class="px-2.5 py-0.5 rounded-full bg-white/15 text-[11px] font-bold backdrop-blur-sm">收支健康</span>
+                    </div>
+                    <div class="font-num text-3xl font-extrabold tracking-tight mb-4">
+                        ${formatCurrency(balance)}
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 pt-3 border-t border-white/15">
+                        <div class="bg-white/10 rounded-2xl p-2.5">
+                            <div class="flex items-center gap-1.5 text-[11px] text-teal-100 mb-0.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-300"></span> 本月總收入
+                            </div>
+                            <div class="font-num text-base font-bold">${formatCurrency(totalIncome)}</div>
+                        </div>
+                        <div class="bg-white/10 rounded-2xl p-2.5">
+                            <div class="flex items-center gap-1.5 text-[11px] text-teal-100 mb-0.5">
+                                <span class="w-2 h-2 rounded-full bg-rose-300"></span> 本月總支出
+                            </div>
+                            <div class="font-num text-base font-bold">${formatCurrency(totalExpense)}</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 即將到期 / 逾期帳單提醒橫幅 -->
+                ${urgentBills.length > 0 ? `
+                <section onclick="switchTab('reminders')" class="md-ripple cursor-pointer rounded-2xl bg-amber-50 border border-amber-200/90 p-3.5 flex items-center justify-between shadow-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-lg shrink-0 shadow-sm">
+                            🔔
+                        </div>
+                        <div>
+                            <div class="text-xs font-black text-amber-900">
+                                您有 ${urgentBills.length} 筆帳單即將到期或已逾期
+                            </div>
+                            <div class="text-[11px] text-amber-700 mt-0.5">
+                                ${urgentBills.map(b => `${b.title} (${formatCurrency(b.amount)})`).join('、')}
+                            </div>
+                        </div>
+                    </div>
+                    <span class="text-amber-600 font-bold text-sm pl-2">查看 ›</span>
+                </section>
+                ` : ''}
+
+                <!-- 本月花費 Top 3 速覽 -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/70 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-black text-slate-800">本月支出主力分類</h2>
+                        <button onclick="switchTab('analytics')" class="text-xs font-bold text-teal-600 hover:underline">完整圖表 ›</button>
+                    </div>
+                    ${topCats.length === 0 ? `
+                        <p class="text-xs text-slate-400 text-center py-4">本月尚無支出紀錄</p>
+                    ` : `
+                        <div class="space-y-3">
+                            ${topCats.map(([catId, amt]) => {
+                                const cat = CATEGORIES[catId] || CATEGORIES.food;
+                                const pct = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
+                                return `
+                                    <div>
+                                        <div class="flex items-center justify-between text-xs mb-1">
+                                            <div class="flex items-center gap-2 font-bold text-slate-700">
+                                                <span>${cat.icon}</span>
+                                                <span>${cat.name}</span>
+                                                <span class="text-[11px] font-normal text-slate-400">${pct}%</span>
+                                            </div>
+                                            <span class="font-num font-bold text-slate-800">${formatCurrency(amt)}</span>
+                                        </div>
+                                        <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full" style="width: ${pct}%; background-color: ${cat.color};"></div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </section>
+
+                <!-- 近期收支明細 -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/70 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-black text-slate-800">近期交易紀錄</h2>
+                        <button onclick="switchTab('transactions')" class="text-xs font-bold text-teal-600 hover:underline">全部明細 ›</button>
+                    </div>
+                    <div class="divide-y divide-slate-100">
+                        ${recentTxs.map(t => renderTransactionRow(t, false)).join('')}
+                    </div>
+                </section>
+            `;
+        }
+
+        /**
+         * 共用單筆交易列表項目渲染
+         */
+        function renderTransactionRow(t, showDelete = true) {
+            const cat = CATEGORIES[t.category] || CATEGORIES.food;
+            const isExpense = t.type === 'expense';
+            return `
+                <div class="py-2.5 flex items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-2xl ${cat.bg} ${cat.text} flex items-center justify-center text-lg shrink-0">
+                            ${cat.icon}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-bold text-slate-800 truncate">${t.note || cat.name}</div>
+                            <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                                <span>${cat.name}</span>
+                                <span>·</span>
+                                <span class="font-num">${t.date.slice(5)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="font-num text-sm font-extrabold ${isExpense ? 'text-slate-800' : 'text-emerald-600'}">
+                            ${isExpense ? '-' : '+'}${t.amount.toLocaleString('zh-TW')}
+                        </span>
+                        ${showDelete ? `
+                            <button onclick="deleteTransaction('${t.id}')" title="刪除此筆" class="w-7 h-7 rounded-full hover:bg-rose-50 text-slate-300 hover:text-rose-500 flex items-center justify-center transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * =====================================================================
+         * 7. 視圖 2：收支明細與搜尋篩選 (Transactions)
+         * =====================================================================
+         */
+        function renderTransactionsHTML() {
+            // 依據搜尋關鍵字、收支類型與分類進行篩選
+            const filtered = transactions
+                .filter(t => {
+                    if (filterType !== 'all' && t.type !== filterType) return false;
+                    if (filterCategory !== 'all' && t.category !== filterCategory) return false;
+                    if (filterSearch.trim() !== '') {
+                        const kw = filterSearch.trim().toLowerCase();
+                        const catName = (CATEGORIES[t.category]?.name || '').toLowerCase();
+                        const note = (t.note || '').toLowerCase();
+                        if (!catName.includes(kw) && !note.includes(kw) && !String(t.amount).includes(kw)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+
+            // 依日期分組
+            const groups = {};
+            filtered.forEach(t => {
+                if (!groups[t.date]) groups[t.date] = [];
+                groups[t.date].push(t);
+            });
+
+            const totalFilteredExp = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+            const totalFilteredInc = filtered.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+
+            return `
+                <!-- 搜尋框與篩選列 -->
+                <section class="space-y-2.5">
+                    <div class="relative">
+                        <input type="text" value="${filterSearch}" oninput="updateTxSearch(this.value)" placeholder="搜尋備註、分類或金額..." class="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-sm font-medium text-slate-700 focus:outline-none focus:border-teal-500 shadow-sm">
+                        <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                    </div>
+
+                    <!-- 收支類型與分類篩選膠囊 (Chips) -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                        <button onclick="setFilterType('all')" class="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors ${filterType === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200'}">全部</button>
+                        <button onclick="setFilterType('expense')" class="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors ${filterType === 'expense' ? 'bg-rose-500 text-white' : 'bg-white text-slate-600 border border-slate-200'}">僅支出</button>
+                        <button onclick="setFilterType('income')" class="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-colors ${filterType === 'income' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}">僅收入</button>
+                        
+                        <select onchange="setFilterCategory(this.value)" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 focus:outline-none">
+                            <option value="all" ${filterCategory === 'all' ? 'selected' : ''}>所有分類</option>
+                            ${Object.values(CATEGORIES).map(c => `
+                                <option value="${c.id}" ${filterCategory === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <!-- 篩選統計摘要 -->
+                    <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-200/60 text-[11px] font-bold text-slate-600">
+                        <span>共 ${filtered.length} 筆紀錄</span>
+                        <div class="flex gap-3 font-num">
+                            <span class="text-emerald-700">收 +${totalFilteredInc.toLocaleString()}</span>
+                            <span class="text-rose-600">支 -${totalFilteredExp.toLocaleString()}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 依日期分組清單 -->
+                ${Object.keys(groups).length === 0 ? `
+                    <div class="bg-white rounded-3xl p-10 text-center border border-slate-200/70">
+                        <div class="text-4xl mb-2">📭</div>
+                        <div class="text-sm font-bold text-slate-600">找不到符合條件的紀錄</div>
+                        <div class="text-xs text-slate-400 mt-1">試試清除搜尋關鍵字或點擊右下角新增一筆</div>
+                    </div>
+                ` : Object.entries(groups).map(([dateStr, items]) => {
+                    const dayExp = items.filter(i => i.type === 'expense').reduce((s, i) => s + i.amount, 0);
+                    return `
+                        <section class="bg-white rounded-3xl p-4 border border-slate-200/70 shadow-sm">
+                            <div class="flex items-center justify-between pb-2 mb-1 border-b border-slate-100">
+                                <span class="font-num text-xs font-extrabold text-slate-500">${dateStr}</span>
+                                <span class="font-num text-[11px] font-bold text-slate-400">當日支出 ${formatCurrency(dayExp)}</span>
+                            </div>
+                            <div class="divide-y divide-slate-100">
+                                ${items.map(t => renderTransactionRow(t, true)).join('')}
+                            </div>
+                        </section>
+                    `;
+                }).join('')}
+            `;
+        }
+
+        function updateTxSearch(val) {
+            filterSearch = val;
+            renderCurrentView();
+        }
+        function setFilterType(type) {
+            filterType = type;
+            renderCurrentView();
+        }
+        function setFilterCategory(cat) {
+            filterCategory = cat;
+            renderCurrentView();
+        }
+
+        function deleteTransaction(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            saveData();
+            renderCurrentView();
+            showSnackbar('已刪除該筆收支紀錄');
+        }
+
+        /**
+         * =====================================================================
+         * 8. 視圖 3：每月與每年花費視覺化分析 (Analytics)
+         * =====================================================================
+         */
+        function renderAnalyticsHTML() {
+            // 取得所有存在資料的年份清單
+            const yearSet = new Set([CURRENT_YEAR, 2025]);
+            transactions.forEach(t => yearSet.add(parseInt(t.date.slice(0, 4), 10)));
+            const availableYears = Array.from(yearSet).sort((a, b) => b - a);
+
+            return `
+                <!-- 月度 / 年度 分析切換頁籤 -->
+                <div class="grid grid-cols-2 bg-slate-200/80 p-1 rounded-2xl">
+                    <button onclick="setAnalyticsMode('monthly')" class="py-2 rounded-xl text-xs font-black transition-all ${analyticsMode === 'monthly' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600'}">
+                        📅 月度花費分析
+                    </button>
+                    <button onclick="setAnalyticsMode('yearly')" class="py-2 rounded-xl text-xs font-black transition-all ${analyticsMode === 'yearly' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600'}">
+                        📊 年度趨勢分析
+                    </button>
+                </div>
+
+                <!-- 年份與月份選擇器 -->
+                <div class="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-400">選擇期間</span>
+                        <select onchange="changeAnalyticsYear(this.value)" class="font-num text-sm font-extrabold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-xl focus:outline-none">
+                            ${availableYears.map(y => `<option value="${y}" ${y === selectedYear ? 'selected' : ''}>${y} 年</option>`).join('')}
+                        </select>
+                        ${analyticsMode === 'monthly' ? `
+                            <select onchange="changeAnalyticsMonth(this.value)" class="font-num text-sm font-extrabold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-xl focus:outline-none">
+                                ${Array.from({ length: 12 }, (_, i) => i + 1).map(m => `
+                                    <option value="${m}" ${m === selectedMonth ? 'selected' : ''}>${m} 月</option>
+                                `).join('')}
+                            </select>
+                        ` : ''}
+                    </div>
+                    <span class="text-[11px] font-bold text-slate-400">單位：新台幣</span>
+                </div>
+
+                ${analyticsMode === 'monthly' ? renderMonthlyAnalyticsContent() : renderYearlyAnalyticsContent()}
+            `;
+        }
+
+        function setAnalyticsMode(mode) {
+            analyticsMode = mode;
+            renderCurrentView();
+        }
+        function changeAnalyticsYear(y) {
+            selectedYear = parseInt(y, 10);
+            renderCurrentView();
+        }
+        function changeAnalyticsMonth(m) {
+            selectedMonth = parseInt(m, 10);
+            renderCurrentView();
+        }
+
+        /**
+         * 月度分析內容：環圈圖 (Donut Chart) + 上月增減比較 + 分類排行榜
+         */
+        function renderMonthlyAnalyticsContent() {
+            const ym = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+            const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
+            const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+            const prevYm = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+
+            const curTxs = transactions.filter(t => t.date.startsWith(ym));
+            const prevTxs = transactions.filter(t => t.date.startsWith(prevYm));
+
+            const curExp = curTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+            const curInc = curTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+            const prevExp = prevTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+            // 計算與上月比較百分比
+            let diffBadge = '<span class="text-slate-400">上月無資料</span>';
+            if (prevExp > 0) {
+                const diffPct = (((curExp - prevExp) / prevExp) * 100).toFixed(1);
+                if (curExp > prevExp) {
+                    diffBadge = `<span class="text-rose-600 font-bold">▲ 較上月增加 ${diffPct}%</span>`;
+                } else if (curExp < prevExp) {
+                    diffBadge = `<span class="text-emerald-600 font-bold">▼ 較上月減少 ${Math.abs(diffPct)}%</span>`;
+                } else {
+                    diffBadge = `<span class="text-slate-500 font-bold">與上月持平</span>`;
+                }
+            }
+
+            // 彙整各支出分類金額
+            const catTotals = {};
+            curTxs.filter(t => t.type === 'expense').forEach(t => {
+                catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+            });
+            const sortedCats = Object.entries(catTotals)
+                .map(([id, amount]) => ({ id, amount, cat: CATEGORIES[id] || CATEGORIES.food }))
+                .sort((a, b) => b.amount - a.amount);
+
+            // 建構 SVG 環圈圖 (Donut Chart)
+            const radius = 54;
+            const circumference = 2 * Math.PI * radius;
+            let cumulativePercent = 0;
+
+            const svgSegments = sortedCats.map(item => {
+                const pct = curExp > 0 ? item.amount / curExp : 0;
+                const dashArray = `${pct * circumference} ${circumference}`;
+                const dashOffset = -cumulativePercent * circumference;
+                cumulativePercent += pct;
+                return `
+                    <circle class="donut-segment" cx="70" cy="70" r="${radius}" fill="transparent"
+                        stroke="${item.cat.color}" stroke-width="18"
+                        stroke-dasharray="${dashArray}" stroke-dashoffset="${dashOffset}"
+                        transform="rotate(-90 70 70)" />
+                `;
+            }).join('');
+
+            return `
+                <!-- 月度收支摘要卡片 -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm">
+                    <div class="grid grid-cols-3 gap-2 text-center divide-x divide-slate-100">
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-bold">總支出</div>
+                            <div class="font-num text-sm font-black text-rose-600 mt-0.5">${formatShortCurrency(curExp)}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-bold">總收入</div>
+                            <div class="font-num text-sm font-black text-emerald-600 mt-0.5">${formatShortCurrency(curInc)}</div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] text-slate-400 font-bold">淨結餘</div>
+                            <div class="font-num text-sm font-black text-slate-800 mt-0.5">${formatShortCurrency(curInc - curExp)}</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-2.5 border-t border-slate-100 text-center text-xs">
+                        ${diffBadge} <span class="text-slate-400 text-[11px]">(上月支出 ${formatCurrency(prevExp)})</span>
+                    </div>
+                </section>
+
+                <!-- 消費結構環圈圖 (Donut Chart) -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm">
+                    <h3 class="text-sm font-black text-slate-800 mb-3">${selectedMonth}月 支出類別佔比</h3>
+                    ${curExp === 0 ? `
+                        <div class="py-8 text-center text-xs text-slate-400">該月份尚無支出資料可供繪製圖表</div>
+                    ` : `
+                        <div class="flex items-center justify-around gap-3 mb-4">
+                            <div class="relative w-[140px] h-[140px] shrink-0">
+                                <svg viewBox="0 0 140 140" class="w-full h-full">
+                                    <circle cx="70" cy="70" r="${radius}" fill="transparent" stroke="#f1f5f9" stroke-width="18" />
+                                    ${svgSegments}
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span class="text-[10px] font-bold text-slate-400">總花費</span>
+                                    <span class="font-num text-xs font-black text-slate-800">${formatShortCurrency(curExp)}</span>
+                                </div>
+                            </div>
+                            <!-- 圖例說明 -->
+                            <div class="flex-1 space-y-1.5">
+                                ${sortedCats.slice(0, 4).map(item => {
+                                    const pct = Math.round((item.amount / curExp) * 100);
+                                    return `
+                                        <div class="flex items-center justify-between text-xs">
+                                            <div class="flex items-center gap-1.5 truncate">
+                                                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${item.cat.color}"></span>
+                                                <span class="font-bold text-slate-700 truncate">${item.cat.name}</span>
+                                            </div>
+                                            <span class="font-num font-bold text-slate-500">${pct}%</span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- 完整分類金額排行榜 -->
+                        <div class="space-y-3 pt-3 border-t border-slate-100">
+                            ${sortedCats.map(item => {
+                                const pct = ((item.amount / curExp) * 100).toFixed(1);
+                                return `
+                                    <div>
+                                        <div class="flex items-center justify-between text-xs mb-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-6 rounded-lg ${item.cat.bg} flex items-center justify-center text-xs">${item.cat.icon}</span>
+                                                <span class="font-bold text-slate-700">${item.cat.name}</span>
+                                                <span class="font-num text-[11px] text-slate-400">${pct}%</span>
+                                            </div>
+                                            <span class="font-num font-extrabold text-slate-800">${formatCurrency(item.amount)}</span>
+                                        </div>
+                                        <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full" style="width:${pct}%; background:${item.cat.color}"></div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </section>
+            `;
+        }
+
+        /**
+         * 年度分析內容：1~12月趨勢長條圖 (Bar Chart) + 年度指標統計
+         */
+        function renderYearlyAnalyticsContent() {
+            const yearPrefix = `${selectedYear}-`;
+            const yearTxs = transactions.filter(t => t.date.startsWith(yearPrefix));
+
+            const monthlyExp = Array(12).fill(0);
+            const monthlyInc = Array(12).fill(0);
+
+            yearTxs.forEach(t => {
+                const mIdx = parseInt(t.date.slice(5, 7), 10) - 1;
+                if (mIdx >= 0 && mIdx < 12) {
+                    if (t.type === 'expense') monthlyExp[mIdx] += t.amount;
+                    else monthlyInc[mIdx] += t.amount;
+                }
+            });
+
+            const totalYearExp = monthlyExp.reduce((a, b) => a + b, 0);
+            const totalYearInc = monthlyInc.reduce((a, b) => a + b, 0);
+            const activeMonthsCount = monthlyExp.filter(v => v > 0).length || 1;
+            const avgMonthlyExp = totalYearExp / activeMonthsCount;
+
+            // 找出最高花費月份
+            let maxExp = 0;
+            let maxMonth = 1;
+            monthlyExp.forEach((val, idx) => {
+                if (val > maxExp) {
+                    maxExp = val;
+                    maxMonth = idx + 1;
+                }
+            });
+
+            const chartMax = Math.max(...monthlyExp, 10000);
+
+            return `
+                <!-- 年度總覽與關鍵指標 -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm space-y-3">
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div class="bg-rose-50/70 border border-rose-100 rounded-2xl p-3">
+                            <div class="text-[11px] font-bold text-rose-500">${selectedYear} 年度總支出</div>
+                            <div class="font-num text-base font-black text-rose-700 mt-0.5">${formatCurrency(totalYearExp)}</div>
+                        </div>
+                        <div class="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3">
+                            <div class="text-[11px] font-bold text-emerald-600">${selectedYear} 年度總收入</div>
+                            <div class="font-num text-base font-black text-emerald-700 mt-0.5">${formatCurrency(totalYearInc)}</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5 pt-1">
+                        <div class="bg-slate-50 rounded-2xl p-2.5 flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-slate-500">平均月支出</span>
+                            <span class="font-num text-xs font-extrabold text-slate-800">${formatShortCurrency(avgMonthlyExp)}</span>
+                        </div>
+                        <div class="bg-slate-50 rounded-2xl p-2.5 flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-slate-500">最高花費月</span>
+                            <span class="font-num text-xs font-extrabold text-amber-600">${maxExp > 0 ? `${maxMonth}月 (${formatShortCurrency(maxExp)})` : '-'}</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1月至12月花費趨勢互動長條圖 -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-black text-slate-800">1~12月 支出趨勢圖</h3>
+                        <span class="text-[11px] text-teal-600 font-bold">點擊長條查看該月明細</span>
+                    </div>
+
+                    <div class="h-48 flex items-end justify-between gap-1.5 pt-6 pb-1 px-1 border-b border-slate-200">
+                        ${monthlyExp.map((val, idx) => {
+                            const m = idx + 1;
+                            const heightPct = val > 0 ? Math.max(8, Math.round((val / chartMax) * 100)) : 3;
+                            const isPeak = val === maxExp && val > 0;
+                            return `
+                                <button onclick="jumpToMonthDetail(${m})" class="flex-1 h-full flex flex-col items-center justify-end group focus:outline-none">
+                                    <span class="font-num text-[9px] font-bold text-slate-500 mb-1 opacity-80 group-hover:opacity-100">
+                                        ${val > 0 ? formatShortCurrency(val) : ''}
+                                    </span>
+                                    <div class="w-full rounded-t-lg transition-all duration-300 ${val === 0 ? 'bg-slate-100' : isPeak ? 'bg-amber-500 group-hover:bg-amber-600' : 'bg-teal-500 group-hover:bg-teal-600'}"
+                                         style="height: ${heightPct}%;">
+                                    </div>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div class="flex justify-between gap-1.5 pt-1.5 px-1">
+                        ${Array.from({ length: 12 }, (_, i) => `
+                            <div class="flex-1 text-center font-num text-[10px] font-bold text-slate-400">${i + 1}月</div>
+                        `).join('')}
+                    </div>
+                </section>
+            `;
+        }
+
+        function jumpToMonthDetail(month) {
+            selectedMonth = month;
+            analyticsMode = 'monthly';
+            renderCurrentView();
+        }
+
+        /**
+         * =====================================================================
+         * 9. 視圖 4：固定帳單與繳費提醒 (Payment Reminders)
+         * =====================================================================
+         */
+        function renderRemindersHTML() {
+            const currentYM = `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, '0')}`;
+            const unpaidBills = reminders.filter(r => r.paidYearMonth !== currentYM);
+            const paidBills = reminders.filter(r => r.paidYearMonth === currentYM);
+            const unpaidTotal = unpaidBills.reduce((s, r) => s + r.amount, 0);
+
+            return `
+                <!-- 頂部繳費摘要與新增按鈕 -->
+                <section class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-slate-400">${CURRENT_MONTH}月 待繳帳單總額</div>
+                        <div class="font-num text-2xl font-black text-slate-800 mt-0.5">${formatCurrency(unpaidTotal)}</div>
+                        <div class="text-[11px] text-slate-500 mt-0.5">待繳 ${unpaidBills.length} 筆 · 已繳清 ${paidBills.length} 筆</div>
+                    </div>
+                    <button onclick="openAddReminderSheet()" class="md-ripple px-3.5 py-2.5 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold text-xs flex items-center gap-1.5 border border-teal-200/70">
+                        <span class="text-base">+</span> 新增帳單
+                    </button>
+                </section>
+
+                <!-- 待繳與即將到期帳單清單 -->
+                <section class="space-y-2.5">
+                    <h2 class="text-xs font-black text-slate-500 px-1">待繳費項目 (${unpaidBills.length})</h2>
+                    ${unpaidBills.length === 0 ? `
+                        <div class="bg-white rounded-3xl p-8 text-center border border-slate-200/70">
+                            <div class="text-4xl mb-2">🎉</div>
+                            <div class="text-sm font-bold text-slate-700">太棒了！本月所有帳單皆已繳清</div>
+                        </div>
+                    ` : unpaidBills.map(rem => renderReminderCard(rem)).join('')}
+                </section>
+
+                <!-- 本月已繳清帳單 -->
+                ${paidBills.length > 0 ? `
+                    <section class="space-y-2.5 pt-2">
+                        <h2 class="text-xs font-black text-slate-400 px-1">本月已繳清 (${paidBills.length})</h2>
+                        ${paidBills.map(rem => renderReminderCard(rem)).join('')}
+                    </section>
+                ` : ''}
+            `;
+        }
+
+        function renderReminderCard(rem) {
+            const cat = CATEGORIES[rem.category] || CATEGORIES.housing;
+            const st = getReminderStatus(rem);
+
+            let badgeHTML = '';
+            let borderClass = 'border-slate-200/80';
+
+            if (st.status === 'overdue') {
+                badgeHTML = `<span class="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 text-[11px] font-black">⚠️ ${st.label}</span>`;
+                borderClass = 'border-rose-300 bg-rose-50/20';
+            } else if (st.status === 'urgent') {
+                badgeHTML = `<span class="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 text-[11px] font-black">⏳ ${st.label}</span>`;
+                borderClass = 'border-amber-300 bg-amber-50/20';
+            } else if (st.status === 'paid') {
+                badgeHTML = `<span class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700 text-[11px] font-black">✅ ${st.label}</span>`;
+            } else {
+                badgeHTML = `<span class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">📅 ${st.label}</span>`;
+            }
+
+            return `
+                <div class="bg-white rounded-3xl p-4 border ${borderClass} shadow-sm flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-2xl ${cat.bg} ${cat.text} flex items-center justify-center text-xl shrink-0">
+                            ${cat.icon}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap mb-1">
+                                <span class="text-sm font-black text-slate-800 truncate">${rem.title}</span>
+                                ${badgeHTML}
+                            </div>
+                            <div class="font-num text-sm font-extrabold text-slate-600">
+                                ${formatCurrency(rem.amount)}
+                                <span class="font-sans text-[11px] font-normal text-slate-400 ml-1">(每月${rem.dueDay}日)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        ${st.status !== 'paid' ? `
+                            <button onclick="openPayModal('${rem.id}')" class="md-ripple px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm">
+                                標記已繳
+                            </button>
+                        ` : `
+                            <button onclick="undoPayReminder('${rem.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-[11px] font-bold">
+                                取消已繳
+                            </button>
+                        `}
+                        <button onclick="deleteReminder('${rem.id}')" title="刪除提醒" class="w-8 h-8 rounded-full hover:bg-rose-50 text-slate-300 hover:text-rose-500 flex items-center justify-center">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * =====================================================================
+         * 10. 底部抽屜：新增記帳與新增帳單操作邏輯
+         * =====================================================================
+         */
+        function openAddTransactionSheet() {
+            formTxType = 'expense';
+            formTxCategory = 'food';
+            document.getElementById('tx-amount').value = '';
+            document.getElementById('tx-date').value = TODAY_STR;
+            document.getElementById('tx-note').value = '';
+            setTxType('expense');
+            document.getElementById('tx-sheet-overlay').classList.remove('hidden');
+        }
+
+        function closeAddTransactionSheet() {
+            document.getElementById('tx-sheet-overlay').classList.add('hidden');
+        }
+
+        function setTxType(type) {
+            formTxType = type;
+            const expBtn = document.getElementById('tx-type-expense');
+            const incBtn = document.getElementById('tx-type-income');
+
+            if (type === 'expense') {
+                expBtn.className = 'py-2 rounded-xl text-sm font-bold bg-rose-500 text-white shadow-sm transition-all';
+                incBtn.className = 'py-2 rounded-xl text-sm font-bold text-slate-600 transition-all';
+                formTxCategory = 'food';
+            } else {
+                incBtn.className = 'py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white shadow-sm transition-all';
+                expBtn.className = 'py-2 rounded-xl text-sm font-bold text-slate-600 transition-all';
+                formTxCategory = 'salary';
+            }
+            renderCategoryGrid();
+        }
+
+        function renderCategoryGrid() {
+            const grid = document.getElementById('tx-category-grid');
+            const filteredCats = Object.values(CATEGORIES).filter(c => c.type === formTxType);
+            grid.innerHTML = filteredCats.map(c => {
+                const isSelected = c.id === formTxCategory;
+                return `
+                    <button type="button" onclick="selectTxCategory('${c.id}')" class="flex flex-col items-center justify-center p-2 rounded-2xl border transition-all ${isSelected ? 'border-teal-600 bg-teal-50/80 shadow-sm scale-[1.02]' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}">
+                        <span class="text-xl mb-0.5">${c.icon}</span>
+                        <span class="text-[11px] font-bold ${isSelected ? 'text-teal-800' : 'text-slate-600'}">${c.name}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectTxCategory(catId) {
+            formTxCategory = catId;
+            renderCategoryGrid();
+        }
+
+        function quickAddAmount(val) {
+            const input = document.getElementById('tx-amount');
+            const current = parseInt(input.value || '0', 10);
+            input.value = current + val;
+        }
+
+        function clearAmount() {
+            document.getElementById('tx-amount').value = '';
+        }
+
+        function saveTransaction() {
+            const amount = parseInt(document.getElementById('tx-amount').value, 10);
+            const date = document.getElementById('tx-date').value || TODAY_STR;
+            const note = document.getElementById('tx-note').value.trim();
+
+            if (!amount || amount <= 0) {
+                showSnackbar('請輸入大於 0 的金額');
+                return;
+            }
+
+            const newTx = {
+                id: 'tx_' + Date.now(),
+                type: formTxType,
+                category: formTxCategory,
+                amount,
+                date,
+                note: note || CATEGORIES[formTxCategory].name
+            };
+
+            transactions.unshift(newTx);
+            saveData();
+            closeAddTransactionSheet();
+            renderCurrentView();
+            showSnackbar(`已新增${formTxType === 'expense' ? '支出' : '收入'} ${formatCurrency(amount)}`);
+        }
+
+        /**
+         * 新增與操作固定繳費提醒
+         */
+        function openAddReminderSheet() {
+            document.getElementById('rem-title').value = '';
+            document.getElementById('rem-amount').value = '';
+            document.getElementById('rem-due-day').value = '25';
+            document.getElementById('reminder-sheet-overlay').classList.remove('hidden');
+        }
+
+        function closeAddReminderSheet() {
+            document.getElementById('reminder-sheet-overlay').classList.add('hidden');
+        }
+
+        function saveReminder() {
+            const title = document.getElementById('rem-title').value.trim();
+            const amount = parseInt(document.getElementById('rem-amount').value, 10);
+            const dueDay = Math.min(31, Math.max(1, parseInt(document.getElementById('rem-due-day').value || '1', 10)));
+            const category = document.getElementById('rem-category').value;
+            const advanceDays = parseInt(document.getElementById('rem-advance').value, 10);
+
+            if (!title || !amount || amount <= 0) {
+                showSnackbar('請完整填寫帳單名稱與金額');
+                return;
+            }
+
+            reminders.push({
+                id: 'rem_' + Date.now(),
+                title,
+                amount,
+                dueDay,
+                category,
+                advanceDays,
+                paidYearMonth: ''
+            });
+
+            saveData();
+            closeAddReminderSheet();
+            renderCurrentView();
+            showSnackbar(`已建立「${title}」繳費提醒`);
+        }
+
+        function openPayModal(remId) {
+            const rem = reminders.find(r => r.id === remId);
+            if (!rem) return;
+            pendingPayReminderId = remId;
+            document.getElementById('pay-modal-desc').textContent = `將標記「${rem.title}」(${formatCurrency(rem.amount)}) 為本月已繳清。`;
+            document.getElementById('pay-sync-tx').checked = true;
+            document.getElementById('pay-modal-overlay').classList.remove('hidden');
+        }
+
+        function closePayModal() {
+            pendingPayReminderId = null;
+            document.getElementById('pay-modal-overlay').classList.add('hidden');
+        }
+
+        function confirmPayReminder() {
+            if (!pendingPayReminderId) return;
+            const rem = reminders.find(r => r.id === pendingPayReminderId);
+            if (rem) {
+                const currentYM = `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, '0')}`;
+                rem.paidYearMonth = currentYM;
+
+                // 若勾選自動同步新增支出紀錄
+                const syncTx = document.getElementById('pay-sync-tx').checked;
+                if (syncTx) {
+                    transactions.unshift({
+                        id: 'tx_' + Date.now(),
+                        type: 'expense',
+                        category: rem.category,
+                        amount: rem.amount,
+                        date: TODAY_STR,
+                        note: `[自動繳費] ${rem.title}`
+                    });
+                }
+                saveData();
+                renderCurrentView();
+                showSnackbar(`已完成「${rem.title}」繳費！`);
+            }
+            closePayModal();
+        }
+
+        function undoPayReminder(remId) {
+            const rem = reminders.find(r => r.id === remId);
+            if (rem) {
+                rem.paidYearMonth = '';
+                saveData();
+                renderCurrentView();
+                showSnackbar('已恢復為待繳費狀態');
+            }
+        }
+
+        function deleteReminder(remId) {
+            reminders = reminders.filter(r => r.id !== remId);
+            saveData();
+            renderCurrentView();
+            showSnackbar('已刪除該項繳費提醒');
+        }
+
+        /**
+         * =====================================================================
+         * 11. 資料管理：匯出 CSV 與重置範例資料
+         * =====================================================================
+         */
+        function openDataModal() {
+            document.getElementById('data-modal-overlay').classList.remove('hidden');
+        }
+        function closeDataModal() {
+            document.getElementById('data-modal-overlay').classList.add('hidden');
+        }
+
+        function exportCSV() {
+            // 加入 UTF-8 BOM 確保 Excel 開啟繁體中文不亂碼
+            const bom = '\uFEFF';
+            const header = ['日期', '收支類型', '分類', '金額(TWD)', '備註'].join(',');
+            const rows = [...transactions]
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map(t => {
+                    const typeStr = t.type === 'expense' ? '支出' : '收入';
+                    const catName = CATEGORIES[t.category]?.name || t.category;
+                    const safeNote = `"${(t.note || '').replace(/"/g, '""')}"`;
+                    return [t.date, typeStr, catName, t.amount, safeNote].join(',');
+                });
+
+            const csvContent = bom + [header, ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `智帳財務報表_${TODAY_STR}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            closeDataModal();
+            showSnackbar('已匯出 CSV 財務報表');
+        }
+
+        function resetDemoData() {
+            transactions = getDefaultTransactions();
+            reminders = getDefaultReminders();
+            saveData();
+            closeDataModal();
+            renderCurrentView();
+            showSnackbar('已還原為預設範例資料');
+        }
+
+        /**
+         * =====================================================================
+         * 12. 啟動應用程式
+         * =====================================================================
+         */
+        window.onload = () => {
+            loadData();
+            updateReminderBadge();
+            switchTab('overview');
+        };
+    </script>
+</body>
+</html>
